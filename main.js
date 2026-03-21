@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Instagram DM Translator (LibreTranslate)
 // @namespace    https://github.com/kingtusks
-// @version      2.0.0
+// @version      2.1.0
 // @description  Translates Instagram DM messages in-place using local LibreTranslate.
 // @author       kingtusks
 // @match        https://www.instagram.com/direct/*
@@ -91,10 +91,7 @@
     }
 
     function looksLikeTarget(text) {
-        const nonAscii = text.replace(/[\x00-\x7F]/g, '');
-        if (nonAscii.length / text.length > 0.2) return false;
-        const words = text.match(/\b[a-zA-Z]{2,}\b/g);
-        return !!(words && words.length > 0);
+        return /^[\d\s\p{Emoji}]+$/u.test(text);
     }
 
     function scanMessages() {
