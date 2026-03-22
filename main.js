@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Instagram DM Translator (Google)
 // @namespace    https://github.com/kingtusks
-// @version      3.1.0
+// @version      3.2.0
 // @description  Translates Instagram DM messages in-place using unofficial Google Translate.
 // @author       kingtusks
 // @match        https://www.instagram.com/direct/*
@@ -14,6 +14,7 @@
 
     const CONFIG = {
         targetLang:   'en',
+        sourceLang:   null, //null detects then translates but u can set a specific with 'tr' for turkish for ex
         minLength:    2,
         requestDelay: 300,
         doneAttr:     'data-igt-dm',
@@ -40,7 +41,8 @@
 
     function translate(text) {
         return new Promise((resolve) => {
-            const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${CONFIG.targetLang}&dt=t&q=${encodeURIComponent(text)}`;
+            const sl = CONFIG.sourceLang || 'auto';
+            const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${CONFIG.targetLang}&dt=t&q=${encodeURIComponent(text)}`;
             GM_xmlhttpRequest({
                 method: 'GET',
                 url,
@@ -83,10 +85,15 @@
 
         const { translated, detectedLang } = result;
 
-        if (!force && (detectedLang === CONFIG.targetLang || translated.trim() === original)) {
-            el.setAttribute(CONFIG.doneAttr, 'skip');
-            el.style.opacity = '1';
-            return;
+        if (!force) {
+            const isTargetLang = detectedLang === CONFIG.targetLang;
+            const isWrongSourceLang = CONFIG.sourceLang && detectedLang !== CONFIG.sourceLang;
+
+            if (isTargetLang || isWrongSourceLang || translated.trim() === original) {
+                el.setAttribute(CONFIG.doneAttr, 'skip');
+                el.style.opacity = '1';
+                return;
+            }
         }
 
         el.innerText = translated;
