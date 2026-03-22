@@ -1,54 +1,31 @@
 # igtranslate
 
-Tampermonkey userscript that translates Instagram DM messages in-place using a self-hosted [LibreTranslate](https://github.com/LibreTranslate/LibreTranslate) instance. Messages are replaced with translated text directly in the chat bubble. No external APIs, no rate limits.
+Tampermonkey userscript that translates Instagram DM messages in-place using the unofficial Google Translate API. Messages are replaced with translated text directly in the chat bubble. No API key, no Docker, no rate limits.
 
 ---
 
 ## Requirements
 
 - [Tampermonkey](https://www.tampermonkey.net/) browser extension
-- [Docker](https://www.docker.com/)
 
 ---
 
 ## Setup
-
-### 1. Start LibreTranslate
-
-Run the container with only the languages you need (each model is ~300MB):
-
-```bash
-docker run -d \
-  --name libretranslate \
-  --restart unless-stopped \
-  -p 5000:5000 \
-  libretranslate/libretranslate \
-  --load-only en,tr
-```
-
-Add any additional language codes to `--load-only` as needed (e.g. `en,tr,es,fr`).
-
-Verify it's working:
-
-```bash
-curl -X POST http://localhost:5000/translate \
-  -H "Content-Type: application/json" \
-  -d '{"q": "Merhaba", "source": "tr", "target": "en"}'
-```
-
-Expected response: `{"translatedText": "Hello"}`
-
-### 2. Install the script
 
 1. Open the Tampermonkey dashboard (click the extension icon → Dashboard)
 2. Click the **+** tab
 3. Delete the placeholder code
 4. Paste the contents of `instagram-dm-translator.user.js`
 5. Hit **Ctrl+S** to save
+6. Navigate to any Instagram DM (`instagram.com/direct/...`) and refresh
 
-### 3. Use it
+---
 
-Navigate to any Instagram DM (`instagram.com/direct/...`) and refresh. Messages will be detected and translated automatically. Translated messages appear in italics — hover over them to see the original text.
+## Usage
+
+Messages are translated automatically on load and as new ones come in. Translated messages appear in italics — hover over them to see the original text.
+
+**Double-click** any message bubble to force-translate it, bypassing all filters. Useful for messages that were skipped or already-translated messages you want to re-translate.
 
 ---
 
@@ -58,24 +35,32 @@ All options are in the `CONFIG` object at the top of the script:
 
 ```js
 const CONFIG = {
-    libreUrl:     'http://localhost:5000',  // LibreTranslate base URL
-    sourceLang:   'auto',                  // source language ('auto' for detection, or e.g. 'tr', 'es')
-    targetLang:   'en',                    // language to translate into
-    minLength:    2,                        // skip strings shorter than this (chars)
-    requestDelay: 200,                      // ms between API calls
-    doneAttr:     'data-igt-dm',           // DOM attribute used to mark processed elements
-    selectors:    ['div[dir="auto"]'],      // CSS selectors targeting message bubbles
+    targetLang:   'en',   // language to translate into
+    sourceLang:   null,   // null = translate all languages, or set e.g. 'tr' for Turkish only
+    minLength:    2,      // skip strings shorter than this (chars)
+    requestDelay: 300,    // ms between API calls
+    doneAttr:     'data-igt-dm',        // DOM attribute used to mark processed elements
+    selectors:    ['div[dir="auto"]'],  // CSS selectors targeting message bubbles
 };
 ```
+
+### sourceLang
+
+Controls which language gets translated:
+
+| Value | Behavior |
+|---|---|
+| `null` | Translates everything that isn't already in `targetLang` |
+| `'tr'` | Only translates Turkish messages, skips everything else |
+| `'es'` | Only translates Spanish messages, skips everything else |
 
 ### Common config changes
 
 | What you want | What to change |
 |---|---|
 | Translate to Spanish instead | `targetLang: 'es'` |
-| Lock source to Turkish (faster, skips detection) | `sourceLang: 'tr'` |
-| LibreTranslate running on a different port | `libreUrl: 'http://localhost:YOUR_PORT'` |
-| LibreTranslate on another machine in your network | `libreUrl: 'http://YOUR_IP:5000'` — also update `@connect` in the header |
+| Only translate Turkish | `sourceLang: 'tr'` |
+| Translate all foreign languages | `sourceLang: null` |
 | Slow down API calls | Increase `requestDelay` |
 
 ---
@@ -92,18 +77,15 @@ If this returns `0`, the script isn't touching any elements. Check that Tampermo
 
 **Selectors stopped working**
 
-Instagram occasionally changes their DOM. If translations stop working, right-click a message bubble → Inspect, find the element containing the message text, and update the `selectors` array in `CONFIG` to match.
-
-**LibreTranslate connection error**
-
-Check the container is running:
-```bash
-docker ps
+Instagram occasionally changes their DOM. If translations stop working, right-click a message bubble → Inspect, find the element containing the message text, and update the `selectors` array in `CONFIG` to match. Then run this in the console to verify:
+```js
+document.querySelectorAll('div[dir="auto"]').length
 ```
-If it's not listed, restart it:
-```bash
-docker start libretranslate
-```
+It should return a number greater than 0.
+
+**A message isn't being translated**
+
+Double-click it to force-translate. If that also fails, open the console and check for network errors — the unofficial Google Translate endpoint can occasionally be unreachable.
 
 ---
 
@@ -124,5 +106,3 @@ Some common codes for `sourceLang` / `targetLang`:
 | Russian | `ru` |
 | Korean | `ko` |
 | Portuguese | `pt` |
-
-Full list: [LibreTranslate language support](https://github.com/LibreTranslate/LibreTranslate#language-support)
