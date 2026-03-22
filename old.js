@@ -1,21 +1,23 @@
 // ==UserScript==
-// @name         Instagram DM Translator (Google)
+// @name         Instagram DM Translator (LibreTranslate)
 // @namespace    https://github.com/kingtusks
-// @version      3.0.0
-// @description  Translates Instagram DM messages in-place using unofficial Google Translate.
+// @version      2.2.0
+// @description  Translates Instagram DM messages in-place using local LibreTranslate.
 // @author       kingtusks
 // @match        https://www.instagram.com/direct/*
 // @grant        GM_xmlhttpRequest
-// @connect      translate.googleapis.com
+// @connect      localhost
 // ==/UserScript==
 
 (function () {
     'use strict';
 
     const CONFIG = {
+        libreUrl:     'http://localhost:5000',
+        sourceLang:   'auto',
         targetLang:   'en',
         minLength:    2,
-        requestDelay: 300,
+        requestDelay: 200,
         doneAttr:     'data-igt-dm',
         selectors:    ['div[dir="auto"]'],
     };
@@ -38,18 +40,43 @@
         processing = false;
     }
 
+    function detectLang(text) {
+        return new Promise((resolve) => {
+            GM_xmlhttpRequest({
+                method: 'POST',
+                url: `${CONFIG.libreUrl}/detect`,
+                headers: { 'Content-Type': 'application/json' },
+                data: JSON.stringify({ q: text }),
+                onload(res) {
+                    try {
+                        const results = JSON.parse(res.responseText);
+                        resolve(results[0]?.language ?? null);
+                    } catch {
+                        resolve(null);
+                    }
+                },
+                onerror:   () => resolve(null),
+                ontimeout: () => resolve(null),
+            });
+        });
+    }
+
     function translate(text) {
         return new Promise((resolve) => {
-            const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${CONFIG.targetLang}&dt=t&q=${encodeURIComponent(text)}`;
             GM_xmlhttpRequest({
-                method: 'GET',
-                url,
+                method: 'POST',
+                url: `${CONFIG.libreUrl}/translate`,
+                headers: { 'Content-Type': 'application/json' },
+                data: JSON.stringify({
+                    q: text,
+                    source: CONFIG.sourceLang,
+                    target: CONFIG.targetLang,
+                    format: 'text',
+                }),
                 onload(res) {
                     try {
                         const data = JSON.parse(res.responseText);
-                        const translated = data[0].map(chunk => chunk[0]).join('');
-                        const detectedLang = data[2];
-                        resolve({ translated, detectedLang });
+                        resolve(data.translatedText ?? null);
                     } catch {
                         resolve(null);
                     }
@@ -70,27 +97,26 @@
         el.setAttribute(CONFIG.doneAttr, 'pending');
         el.style.opacity = '0.5';
 
+        const detected = await detectLang(original);
+
+        if (detected === CONFIG.targetLang) {
+            el.setAttribute(CONFIG.doneAttr, 'skip');
+            el.style.opacity = '1';
+            return;
+        }
+
         const result = await translate(original);
 
-        if (!result) {
+        if (result && result.trim() !== original) {
+            el.innerText = result;
+            el.title = original;
+            el.setAttribute(CONFIG.doneAttr, 'done');
+            el.style.opacity = '1';
+            el.style.fontStyle = 'italic';
+        } else {
             el.setAttribute(CONFIG.doneAttr, 'skip');
             el.style.opacity = '1';
-            return;
         }
-
-        const { translated, detectedLang } = result;
-
-        if (detectedLang === CONFIG.targetLang || translated.trim() === original) {
-            el.setAttribute(CONFIG.doneAttr, 'skip');
-            el.style.opacity = '1';
-            return;
-        }
-
-        el.innerText = translated;
-        el.title = original;
-        el.setAttribute(CONFIG.doneAttr, 'done');
-        el.style.opacity = '1';
-        el.style.fontStyle = 'italic';
     }
 
     function scanMessages() {
