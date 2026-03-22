@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Instagram DM Translator (Google)
 // @namespace    https://github.com/kingtusks
-// @version      3.0.0
+// @version      3.1.0
 // @description  Translates Instagram DM messages in-place using unofficial Google Translate.
 // @author       kingtusks
 // @match        https://www.instagram.com/direct/*
@@ -60,12 +60,15 @@
         });
     }
 
-    async function translateElement(el) {
-        if (el.getAttribute(CONFIG.doneAttr)) return;
+    async function translateElement(el, force = false) {
+        if (!force && el.getAttribute(CONFIG.doneAttr)) return;
 
-        const original = el.innerText.trim();
+        const original = force
+            ? (el.title || el.innerText.trim())
+            : el.innerText.trim();
+
         if (!original || original.length < CONFIG.minLength) return;
-        if (/^[\d\s\p{Emoji}]+$/u.test(original)) return;
+        if (!force && /^[\d\s\p{Emoji}]+$/u.test(original)) return;
 
         el.setAttribute(CONFIG.doneAttr, 'pending');
         el.style.opacity = '0.5';
@@ -80,7 +83,7 @@
 
         const { translated, detectedLang } = result;
 
-        if (detectedLang === CONFIG.targetLang || translated.trim() === original) {
+        if (!force && (detectedLang === CONFIG.targetLang || translated.trim() === original)) {
             el.setAttribute(CONFIG.doneAttr, 'skip');
             el.style.opacity = '1';
             return;
@@ -91,6 +94,13 @@
         el.setAttribute(CONFIG.doneAttr, 'done');
         el.style.opacity = '1';
         el.style.fontStyle = 'italic';
+    }
+
+    function onDoubleClick(e) {
+        const el = e.target.closest(CONFIG.selectors.join(','));
+        if (!el) return;
+        e.preventDefault();
+        translateElement(el, true);
     }
 
     function scanMessages() {
@@ -108,6 +118,7 @@
     });
 
     observer.observe(document.body, { childList: true, subtree: true });
+    document.addEventListener('dblclick', onDoubleClick);
 
     function sleep(ms) {
         return new Promise((res) => setTimeout(res, ms));
